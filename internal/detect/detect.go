@@ -58,9 +58,11 @@ var (
 	defaultErr  error
 )
 
-// Default returns a singleton detector configured for English vs Romanian
-// using the embedded English dictionary. Useful when no project config is
-// present.
+// Default returns a singleton detector with a usable out-of-the-box
+// configuration: target English with the embedded English dictionary,
+// off-target Romanian (the case the tool was originally built for).
+// Library callers normally build a Detector via New(Config{...}) instead;
+// Default is a convenience for quick experiments.
 func Default() *Detector {
 	defaultOnce.Do(func() {
 		defaultDet, defaultErr = New(Config{
@@ -108,11 +110,12 @@ func New(cfg Config) (*Detector, error) {
 		off = append(off, l)
 	}
 	if len(langs) < 2 {
-		// Lingua needs at least two languages to score; default to RO as
-		// the off-target if the caller didn't pick any.
-		ro := lingua.Romanian
-		langs = append(langs, ro)
-		off = append(off, ro)
+		// Lingua needs at least two languages to score; if the caller
+		// didn't pick any off-target language we add Romanian as the
+		// historical default (the case the tool was first built for).
+		fallback := lingua.Romanian
+		langs = append(langs, fallback)
+		off = append(off, fallback)
 	}
 	det := lingua.NewLanguageDetectorBuilder().
 		FromLanguages(langs...).

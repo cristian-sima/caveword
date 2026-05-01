@@ -54,8 +54,11 @@ type Finding struct {
 	Kind    string
 	Snippet string
 	CtxHash string
-	RoConf  float64
-	EnConf  float64
+	// OffConf and TargetConf hold lingua confidence values for the
+	// off-target winner and the target language respectively. They are
+	// persisted in the legacy SQLite columns ro_conf / en_conf.
+	OffConf    float64
+	TargetConf float64
 }
 
 type Verdict struct {
@@ -111,7 +114,7 @@ func (s *Store) UpsertFinding(f Finding) error {
 		  snippet=excluded.snippet, ctx_hash=excluded.ctx_hash,
 		  ro_conf=excluded.ro_conf, en_conf=excluded.en_conf,
 		  last_seen=excluded.last_seen
-	`, f.Sig, f.File, f.Line, f.Col, f.Token, f.Kind, f.Snippet, f.CtxHash, f.RoConf, f.EnConf, now)
+	`, f.Sig, f.File, f.Line, f.Col, f.Token, f.Kind, f.Snippet, f.CtxHash, f.OffConf, f.TargetConf, now)
 	return err
 }
 
@@ -183,7 +186,7 @@ func (s *Store) ListPending(limit int) ([]Finding, error) {
 	var out []Finding
 	for rows.Next() {
 		var f Finding
-		if err := rows.Scan(&f.Sig, &f.File, &f.Line, &f.Col, &f.Token, &f.Kind, &f.Snippet, &f.CtxHash, &f.RoConf, &f.EnConf); err != nil {
+		if err := rows.Scan(&f.Sig, &f.File, &f.Line, &f.Col, &f.Token, &f.Kind, &f.Snippet, &f.CtxHash, &f.OffConf, &f.TargetConf); err != nil {
 			return nil, err
 		}
 		out = append(out, f)
@@ -220,7 +223,7 @@ func (s *Store) ListAll() ([]FindingWithVerdict, error) {
 		var fv FindingWithVerdict
 		if err := rows.Scan(
 			&fv.Sig, &fv.File, &fv.Line, &fv.Col, &fv.Token, &fv.Kind, &fv.Snippet, &fv.CtxHash,
-			&fv.RoConf, &fv.EnConf,
+			&fv.OffConf, &fv.TargetConf,
 			&fv.Verdict, &fv.SuggestedEn, &fv.Note, &fv.Reviewer, &fv.ReviewedAt, &fv.CarriedFrom,
 		); err != nil {
 			return nil, err

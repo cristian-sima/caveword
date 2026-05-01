@@ -9,16 +9,38 @@ import (
 	"github.com/cristian-sima/caveword/internal/store"
 )
 
-// ValidVerdicts are the labels Claude (or a human) may apply.
+// ValidVerdicts are the canonical labels a reviewer (human or model)
+// may apply to a finding.
 var ValidVerdicts = map[string]struct{}{
-	"ro_confirmed": {}, // genuinely Romanian, candidate for renaming
-	"en_actually":  {}, // false positive — really English
-	"proper_noun":  {}, // person/place/brand — leave alone
-	"domain_ok":    {}, // RO but accepted domain term — promote to allowlist
-	"ambiguous":    {}, // can't tell from this snippet alone
+	"confirmed":      {}, // genuinely off-target language; rename
+	"false_positive": {}, // actually target language; tool was wrong
+	"proper_noun":    {}, // person, brand, library — leave alone
+	"domain_ok":      {}, // off-target but accepted (DB column, schema, …)
+	"ambiguous":      {}, // can't tell from this snippet alone
+}
+
+// verdictAliases maps deprecated labels to their canonical equivalents,
+// so review JSON files written by older versions of the tool keep working.
+var verdictAliases = map[string]string{
+	"ro_confirmed": "confirmed",
+	"en_actually":  "false_positive",
+}
+
+// canonicalVerdict resolves a label through the alias table and returns the
+// canonical name plus whether the label (after aliasing) is valid.
+func canonicalVerdict(label string) (string, bool) {
+	if v, ok := verdictAliases[label]; ok {
+		label = v
+	}
+	_, ok := ValidVerdicts[label]
+	return label, ok
 }
 
 // ExportItem is the JSON record sent out for review.
+//
+// JSON field names ro_conf / en_conf are kept stable for backward
+// compatibility with reviewed batches written by earlier versions of the
+// tool. Their semantics are now off-target / target lingua confidence.
 type ExportItem struct {
 	Sig         string  `json:"sig"`
 	File        string  `json:"file"`
@@ -27,14 +49,14 @@ type ExportItem struct {
 	Token       string  `json:"token"`
 	Kind        string  `json:"kind"`
 	Snippet     string  `json:"snippet"`
-	RoConf      float64 `json:"ro_conf"`
-	EnConf      float64 `json:"en_conf"`
+	OffConf     float64 `json:"ro_conf"`
+	TargetConf  float64 `json:"en_conf"`
 	Verdict     string  `json:"verdict,omitempty"`
 	SuggestedEn string  `json:"suggested_en,omitempty"`
 	Note        string  `json:"note,omitempty"`
 }
 
-// Export writes pending findings as JSON for offline / Claude review.
+// Export writes pending findings as JSON for offline review.
 func Export(s *store.Store, w io.Writer, limit int) (int, error) {
 	pending, err := s.ListPending(limit)
 	if err != nil {
@@ -45,7 +67,7 @@ func Export(s *store.Store, w io.Writer, limit int) (int, error) {
 		items = append(items, ExportItem{
 			Sig: p.Sig, File: p.File, Line: p.Line, Col: p.Col,
 			Token: p.Token, Kind: p.Kind, Snippet: p.Snippet,
-			RoConf: p.RoConf, EnConf: p.EnConf,
+			OffConf: p.OffConf, TargetConf: p.TargetConf,
 		})
 	}
 	enc := json.NewEncoder(w)
@@ -69,11 +91,12 @@ func Apply(s *store.Store, r io.Reader, reviewer string) (int, error) {
 		if it.Verdict == "" {
 			continue
 		}
-		if _, ok := ValidVerdicts[it.Verdict]; !ok {
+		canonical, ok := canonicalVerdict(it.Verdict)
+		if !ok {
 			return n, fmt.Errorf("invalid verdict %q for sig %s", it.Verdict, it.Sig)
 		}
 		v := store.Verdict{
-			Sig: it.Sig, Verdict: it.Verdict,
+			Sig: it.Sig, Verdict: canonical,
 			SuggestedEn: it.SuggestedEn, Note: it.Note,
 			ReviewedAt: now, Reviewer: reviewer,
 		}

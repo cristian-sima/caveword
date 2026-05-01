@@ -64,7 +64,7 @@ const user = {
 </table>
 
 `caveword scan` flags `calculerSolde`, `estDébité`, `montant`, `utilisateur`,
-`nom`, and `ageInAnnées`. After triage (verdict `ro_confirmed`,
+`nom`, and `ageInAnnées`. After triage (verdict `confirmed`,
 `suggested_en` filled in) the rename is yours to apply, and the verdict
 sticks to the finding's signature so a rescan does not re-open it.
 
@@ -72,7 +72,8 @@ sticks to the finding's signature so a rescan does not re-open it.
 
 Caveword masks string literals and JSX text before scanning. Database
 columns, JSON tags, and user-facing labels in the source language are
-**not** flagged.
+**not** flagged. The example below pairs an English codebase with
+Spanish strings (`target: en`, `detect: es`).
 
 <table>
 <tr>
@@ -83,17 +84,17 @@ columns, JSON tags, and user-facing labels in the source language are
 <td valign="top">
 
 ```go
-// Account mirrors the SAGA chart-of-accounts row.
+// Account mirrors the upstream chart-of-accounts row.
 type Account struct {
-    Name string `json:"denumire"`
-    Code string `json:"cont"`
+    Name string `json:"nombre"`
+    Code string `json:"codigo"`
 }
 
 func loadChartOfAccounts(db *sql.DB) ([]Account, error) {
     rows, err := db.Query(`
-        SELECT cont, denumire
-        FROM   CONTURI
-        WHERE  rang = 'D'
+        SELECT codigo, nombre
+        FROM   cuentas
+        WHERE  activa = 1
     `)
     ...
 }
@@ -103,7 +104,7 @@ func loadChartOfAccounts(db *sql.DB) ([]Account, error) {
 function AccountList({ items }) {
   return (
     <div>
-      <h3>Lista conturilor</h3>
+      <h3>Lista de cuentas</h3>
       {items.map(a =>
         <div key={a.code}>{a.code} — {a.name}</div>
       )}
@@ -116,16 +117,16 @@ function AccountList({ items }) {
 <td valign="top">
 
 ```text
-caveword scan --repo .
+caveword scan --repo . --target en --detect es
 scanned: candidates=42 flagged=0
 findings: 0   reviewed: 0   pending: 0
 ```
 
-The Go field names and the function names are English; every Romanian
+The Go field names and the function names are English; every Spanish
 token sits inside a string literal or a JSX text node, both of which the
 scanner masks before classification.
 
-When an off-language identifier really does have to stay (a SQL column
+When an off-target identifier really does have to stay (a SQL column
 mapped 1:1 to a Go struct field, an XML schema element, a test that
 exercises a literal third-party label), record the verdict `domain_ok`
 once and rescans treat it as accepted.
@@ -150,11 +151,15 @@ You then triage findings into one of five verdicts:
 
 | Verdict | Meaning |
 |---------|---------|
-| `ro_confirmed` | Genuinely off-language; rename. Fill `suggested_en`. |
-| `en_actually` | False positive (split residue, abbreviation, etc.). |
+| `confirmed` | Genuinely off-target language; rename. Fill `suggested_en`. |
+| `false_positive` | Tool was wrong &mdash; the token really is in the target language. |
 | `proper_noun` | Person, brand, library &mdash; leave alone. |
-| `domain_ok` | Off-language but accepted (DB column, third-party schema). |
+| `domain_ok` | Off-target but accepted (DB column, third-party schema). |
 | `ambiguous` | Cannot decide from this snippet. |
+
+The deprecated labels `ro_confirmed` and `en_actually` are still accepted
+on apply (mapped to `confirmed` / `false_positive`) so reviewed batches
+written by older versions of the tool keep working.
 
 Verdicts are keyed by the finding's signature, so a rescan after
 unrelated edits carries verdicts forward automatically. Renames or

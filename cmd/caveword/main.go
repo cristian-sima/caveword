@@ -52,8 +52,9 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `caveword — flag identifiers, paths, and comments that look like
-the wrong language (default model: Romanian vs English).
+	fmt.Fprintln(os.Stderr, `caveword — flag identifiers, paths, and comments that look
+like the wrong language. Configurable target / off-target language pair
+(default: target=en, detect=ro). See README for adding more languages.
 
 Usage:
   caveword scan   [--repo PATH] [--diff BASE] [--ext .go,.ts,...] [--kinds ident,path]
@@ -155,7 +156,7 @@ func runScan(args []string) error {
 				// ro_conf / en_conf in the schema map to off-target /
 				// target lingua confidence respectively (the column names
 				// predate the multi-language refactor).
-				RoConf: res.OffConf, EnConf: res.TargetConf,
+				OffConf: res.OffConf, TargetConf: res.TargetConf,
 			}
 			if err := st.UpsertFinding(sf); err != nil {
 				return err
@@ -291,7 +292,7 @@ func runList(args []string) error {
 		return err
 	}
 	for _, r := range rows {
-		fmt.Printf("%s:%d  [%s]  %s   ro=%.2f en=%.2f\n", r.File, r.Line, r.Kind, r.Token, r.RoConf, r.EnConf)
+		fmt.Printf("%s:%d  [%s]  %s   off=%.2f target=%.2f\n", r.File, r.Line, r.Kind, r.Token, r.OffConf, r.TargetConf)
 	}
 	return nil
 }
@@ -323,8 +324,11 @@ func runDump(args []string) error {
 		Token       string  `json:"token"`
 		Kind        string  `json:"kind"`
 		Snippet     string  `json:"snippet"`
-		RoConf      float64 `json:"ro_conf"`
-		EnConf      float64 `json:"en_conf"`
+		// JSON keys ro_conf / en_conf retained for backward compatibility
+		// with batches written by older versions of the tool. They now
+		// hold off-target / target lingua confidence respectively.
+		OffConf    float64 `json:"ro_conf"`
+		TargetConf float64 `json:"en_conf"`
 		Verdict     string  `json:"verdict,omitempty"`
 		SuggestedEn string  `json:"suggested_en,omitempty"`
 		Note        string  `json:"note,omitempty"`
@@ -351,7 +355,7 @@ func runDump(args []string) error {
 		items = append(items, item{
 			Sig: r.Sig, File: r.File, Line: r.Line, Col: r.Col,
 			Token: r.Token, Kind: r.Kind, Snippet: r.Snippet,
-			RoConf: r.RoConf, EnConf: r.EnConf,
+			OffConf: r.OffConf, TargetConf: r.TargetConf,
 			Verdict: r.Verdict, SuggestedEn: r.SuggestedEn, Note: r.Note,
 			Reviewer: r.Reviewer, ReviewedAt: r.ReviewedAt, CarriedFrom: r.CarriedFrom,
 		})
