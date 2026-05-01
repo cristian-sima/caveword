@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cristian-sima/caveword/internal/config"
 	"github.com/cristian-sima/caveword/internal/detect"
 	"github.com/cristian-sima/caveword/internal/diff"
 	"github.com/cristian-sima/caveword/internal/extract"
@@ -71,6 +72,10 @@ func runScan(args []string) error {
 	base := fs.String("diff", "", "git base ref for diff-mode (empty = full scan)")
 	extList := fs.String("ext", "", "comma-separated extensions to limit scan (default: all supported)")
 	kindList := fs.String("kinds", "ident,path", "comma-separated finding kinds to keep (ident,comment,path)")
+	target := fs.String("target", "", "target language ISO code (e.g. en); overrides config.json")
+	detectFlag := fs.String("detect", "", "comma-separated off-target language codes (e.g. ro,fr)")
+	margin := fs.Float64("margin", 0, "lingua margin off-target must beat target by; 0 keeps default")
+	minLen := fs.Int("min-len", 0, "minimum token length to classify; 0 keeps default")
 	verbose := fs.Bool("v", false, "verbose")
 	dryRun := fs.Bool("dry-run", false, "just list which dirs/files would be scanned, then exit")
 	fs.Parse(args)
@@ -88,7 +93,10 @@ func runScan(args []string) error {
 	}
 	defer st.Close()
 
-	det := detect.Default()
+	det, err := buildDetector(repoRoot, *target, *detectFlag, *margin, *minLen, *verbose)
+	if err != nil {
+		return err
+	}
 
 	files, err := pickFiles(repoRoot, *base, allowedExt)
 	if err != nil {
@@ -134,7 +142,7 @@ func runScan(args []string) error {
 			}
 			totalCandidates++
 			res := det.Classify(fi.Token)
-			if !res.IsRomanian {
+			if !res.Flagged {
 				continue
 			}
 			flagged++
@@ -143,7 +151,11 @@ func runScan(args []string) error {
 			sf := store.Finding{
 				Sig: sig, File: rel, Line: fi.Line, Col: fi.Col,
 				Token: fi.Token, Kind: fi.Kind, Snippet: fi.Snippet,
-				CtxHash: ctxHash, RoConf: res.RoConfidence, EnConf: res.EnConfidence,
+				CtxHash: ctxHash,
+				// ro_conf / en_conf in the schema map to off-target /
+				// target lingua confidence respectively (the column names
+				// predate the multi-language refactor).
+				RoConf: res.OffConf, EnConf: res.TargetConf,
 			}
 			if err := st.UpsertFinding(sf); err != nil {
 				return err
@@ -418,6 +430,86 @@ func pickFiles(repoRoot, base string, allowedExt map[string]bool) ([]string, err
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// buildDetector loads the per-repo config (if present), applies CLI overrides,
+// loads any project-local or user-global dictionaries for the target / detect
+// languages, and returns a configured Detector.
+func buildDetector(repoRoot, target, detectCSV string, margin float64, minLen int, verbose bool) (*detect.Detector, error) {
+	cfg, err := config.Load(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	if target != "" {
+		cfg.Target = target
+	}
+	if detectCSV != "" {
+		cfg.Detect = splitCSV(detectCSV)
+	}
+	if margin != 0 {
+		cfg.Margin = margin
+	}
+	if minLen != 0 {
+		cfg.MinLen = minLen
+	}
+	if cfg.Target == "" {
+		cfg.Target = "en"
+	}
+	if len(cfg.Detect) == 0 {
+		cfg.Detect = []string{"ro"}
+	}
+
+	dicts := map[string]map[string]struct{}{}
+	codes := append([]string{cfg.Target}, cfg.Detect...)
+	for _, c := range codes {
+		c = detect.LangCode(c)
+		if c == "" {
+			continue
+		}
+		if c == "en" {
+			dicts["en"] = detect.EnDict()
+			continue
+		}
+		path := detect.FindDict(repoRoot, c)
+		if path == "" {
+			if verbose {
+				fmt.Fprintf(os.Stderr, "no dict_%s.txt found in %v — falling back to lingua only\n",
+					c, detect.DictSearchPaths(repoRoot))
+			}
+			continue
+		}
+		d, err := detect.LoadDict(path)
+		if err != nil {
+			return nil, fmt.Errorf("load dict %s: %w", path, err)
+		}
+		dicts[c] = d
+		if verbose {
+			fmt.Fprintf(os.Stderr, "loaded %d entries from %s\n", len(d), path)
+		}
+	}
+
+	allow := append(detect.DefaultAllowlist(), cfg.Allowlist...)
+
+	return detect.New(detect.Config{
+		Target:         cfg.Target,
+		Detect:         cfg.Detect,
+		Dicts:          dicts,
+		Allowlist:      allow,
+		ExtraStopwords: cfg.ExtraStopwords,
+		MinLen:         cfg.MinLen,
+		Margin:         cfg.Margin,
+	})
+}
+
+func splitCSV(s string) []string {
+	out := []string{}
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // pathTokens emits findings for camelCase/snake-split tokens of the file
