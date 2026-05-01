@@ -1,0 +1,12 @@
+# caveword's own state when running on itself
+.caveword/
+
+# build artifacts
+/caveword
+/caveword.exe
+/cmd/caveword/caveword
+/cmd/caveword/caveword.exe
+
+# IDE / editor
+.idea/
+.vscode/
