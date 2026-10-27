@@ -1,3 +1,4 @@
+// cspell:ignore elif nonlocal
 package extract
 
 import (

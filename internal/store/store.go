@@ -1,3 +1,4 @@
+// cspell:ignore ifnull sugg
 package store
 
 import (

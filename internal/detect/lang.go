@@ -1,3 +1,4 @@
+// cspell:ignore bokmal
 package detect
 
 import (

@@ -1,3 +1,4 @@
+// cspell:ignore fset
 package extract
 
 import (

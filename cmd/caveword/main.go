@@ -1,3 +1,4 @@
+// cspell:ignore ekeys
 package main
 
 import (

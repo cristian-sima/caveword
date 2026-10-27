@@ -1,0 +1,32 @@
+{
+    "version": "0.2",
+    "enabled": true,
+    "language": "en,ro",
+    "import": [
+        "@cspell/dict-ro-ro/cspell-ext.json"
+    ],
+    "ignorePaths": [
+        ".*/**",
+        "garbage/**",
+        "vendor/**",
+        "go.sum",
+        "**/*_gen.go",
+        "**/*.gen.go",
+        "**/docs/docs.go",
+        "**/testdata/**",
+        "**/fixtures/**",
+        "**/*.sql",
+        "**/*.xml",
+        "**/*.json",
+        "**/*.pdf"
+    ],
+    "words": [
+        "anaf",
+        "caveword",
+        "modernc",
+        "pemistahl",
+        "stopwords",
+        "wailsjs",
+        "wordlist"
+    ]
+}

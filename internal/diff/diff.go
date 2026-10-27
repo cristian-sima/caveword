@@ -1,3 +1,4 @@
+// cspell:ignore acmr errb
 package diff
 
 import (

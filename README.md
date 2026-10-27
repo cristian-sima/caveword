@@ -1,3 +1,4 @@
+<!-- cspell:ignore années calculer codigo cuentas débité dwyl neighbourhood nombre rescan rescans testdata utilisateur wordlists -->
 <p align="center">
   <img src="assets/logo.svg" width="360" alt="caveword" />
 </p>

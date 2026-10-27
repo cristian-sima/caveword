@@ -1,3 +1,4 @@
+// cspell:ignore mypy nuxt pipfile pycache pytest venv
 package extract
 
 import (

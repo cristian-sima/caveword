@@ -1,3 +1,4 @@
+// cspell:ignore anafspv asdict confs dedup dedupe doctr easyocr epub fromdict getdefault iban localdata paddleocr pdfa pdfs pytesseract rzbr setdefault sidenote sidesand sideview sidework stopword textline textlines txns
 package detect
 
 import (
